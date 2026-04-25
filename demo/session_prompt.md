@@ -50,6 +50,86 @@ format enforces this structurally — not by convention.
 
 ---
 
+## Act 0.5 — az Underlearning Detected → Judicial Hearing: Amendment 13 vs Amendment 11
+
+After `train-sum` prints the warmup convergence table, the engineer notices `val_az`
+is not converging while `val_gyy` and `val_vel` have already declined sharply.
+
+```
+train-sum shows val_az is stuck at ~14,000 m/s² after 93 epochs.
+val_gyy converged to ~1503 dps². val_az has barely moved.
+What do we do — is this an Article I violation or an architecture problem?
+```
+
+**What fires:**
+1. `physics-reviewer` — plots `L_az` per epoch alongside `L_gyy` and `L_vel`.
+   Prints derivation trace:
+   ```
+   L_az traces to: vertical_oscillation_cm → peak_az_ms2 = (2π·cadence/60)² · vert_osc_m
+   lambda_az = 0.041 (derived: peak_az_ms2 / peak_gyy_dps · lambda_gyy)
+   val_az epoch 93: 14,312 m/s²   target <2,000 m/s²
+   ```
+   Finding: `lambda_az` is not wrong — the network is underfitting the `az` channel.
+
+2. `bill-drafter` — engineer files a Bill. Two competing proposed changes:
+   - **Change A:** Re-derive `lambda_az` upward (Amendment 13 calibration path)
+   - **Change B:** Add 12 Fourier features tuned to the vertical oscillation frequency
+     band (architecture change — but Amendment 11 froze `pinn_model.py`)
+
+3. `judicial-clerk` — warms courtroom. Assigns attorneys.
+
+4. **attorney-A** argues **Amendment 13** (calibration constants path):
+   - `lambda_az = 0.041` was derived when `val_az` loss magnitude was estimated at
+     training-set scale. Measured `val_az` at epoch 93 is 7× larger than `val_gyy`.
+     The weighting is wrong relative to the other loss terms — this is a calibration
+     error, not an architecture error.
+   - Amendment 13 explicitly permits re-derivation of calibration constants when
+     measured evidence shows the original derivation was at the wrong scale.
+   - New derivation closes: `lambda_az_new = lambda_az × (val_gyy_target / val_az_target)`
+     = 0.041 × (1503 / 14312) → requires a k correction factor — this closes from
+     primitives, not from a guess.
+   - Architecture change is a much larger intervention; Amendment 11 froze the
+     architecture for good reason — it prevents scope creep mid-training.
+
+5. **attorney-B** argues **Amendment 11** (architecture integrity) + **Article I**:
+   - `lambda_az` was correctly derived from `vertical_oscillation_cm`. The primitive
+     is right. The lambda is right. The network simply does not have enough representational
+     capacity in the oscillation-sensitive frequency band.
+   - Increasing `lambda_az` will force the network to prioritise `az` but will not give
+     it new capacity to represent the signal — it will just degrade `val_gyy` convergence
+     instead. The total physics loss may not improve.
+   - `physics-reviewer` evidence: `L_az` residuals show structured oscillation at
+     the push-off frequency (30ms scale = cadence-period derived) — a capacity signal,
+     not a weighting signal. Capacity gaps cannot be fixed by lambda.
+   - Amendment 11 froze `pinn_model.py` to prevent arbitrary changes, but it does not
+     prohibit a targeted, physics-grounded architecture amendment filed as a Bill.
+     The correct path is a new Bill for 12 Fourier features at the `vertical_oscillation`
+     frequency band — fully traceable to primitive 1.
+
+6. **Justice rules** (Benjamin Franklin Principle):
+   - `physics-reviewer` residual plot is the deciding evidence: structured oscillation
+     in `L_az` residuals confirms capacity deficit, not weighting imbalance.
+   - Increasing `lambda_az` without capacity would transfer loss, not reduce it.
+   - **Amendment 11 + Article I prevail. Architecture amendment is the correct path.**
+   - Condition: the 12 Fourier features must be derived from `vertical_oscillation_cm`
+     frequency `f_osc = cadence_spm / 60` — no guessed frequency bands permitted.
+   - `lambda_az = 0.041` is locked. `pinn_model.py` amendment filed as a new Bill.
+   - Case law entry appended to `docs/gaitsense_code/case_law.md`.
+
+7. `layer-setter` — receives enacted Bill, adds 12 Fourier features at
+   `f_osc ± 1 Hz` band derived from cadence primitive. Rewrites and re-freezes
+   `pinn_model.py`. Amendment 11 signal plot mandate fires before next training epoch.
+
+8. `pinn-executor` — resumes warmup from epoch 93 checkpoint with new architecture.
+   `train-sum` confirms `val_az` breaks below 2,000 m/s² within 40 epochs.
+
+**Key demo moment:** The police and attorneys prevent the engineer from taking the
+fast path (bumping lambda_az) that looks reasonable but would just redistribute
+loss. The governance system forces the physically correct intervention — even when
+the shortcut is tempting.
+
+---
+
 ## Act 1 — PINN-Generated Novel Profile → Renode Step Counting
 
 ```
@@ -208,30 +288,196 @@ Run the stage gate checks and close the session.
   - **Patentable candidate:** "PINN-generalised gait profile generation — novel cadence
     interpolation beyond training set without explicit profile definition"
   - `next_stage_must`: full 500-epoch v10 run before production export
-  - Constitutional locks: `lambda_gyy = 0.256` immutable (case law 2026-04-25)
+  - Constitutional locks: `lambda_gyy = 0.256` immutable (case law 2026-04-25);
+    `lambda_az = 0.041` immutable — az underlearning is architecture, not calibration
+    (case law 2026-04-25)
 
 ---
 
-## Full Agent Roster (29 agents across this session)
+## Act 6 — Collocation Strategy: Agents Discover a Sampling Gap, Debate, and Write Production Code
+
+After Act 5 validation passes, the engineer asks a deeper question: is uniform
+time-domain collocation the right way to enforce physics loss, or are we leaving
+generalisation accuracy on the table?
+
+```
+The PINN validated at cadence=88, but I want to know if we're sampling the gait
+cycle optimally. Right now physics loss is evaluated at uniform time steps.
+Is that the best collocation strategy, or should we be denser at biomechanically
+significant events? Analyse this before the 500-epoch run.
+```
+
+**What fires:**
+
+1. `sw-advisor` — reads `physics_loss.py`, `walker_model.py`, and the epoch logs.
+   Finds: `L_az` residuals (from Act 0.5) were highest at the push-off window
+   (t ≈ 0.18–0.22 × stride period). Uniform sampling puts only ~4% of collocation
+   points in this window. Signal evidence: push-off contains the largest az
+   amplitude — cadence × vertical_oscillation product peaks here.
+   ```
+   sw-advisor report:
+     Push-off window (t=0.18–0.22 × T_stride): 4% of uniform samples
+     Peak |az| amplitude: 18.3 m/s² (flat), 41.2 m/s² (stairs)
+     Residual concentration: 67% of total L_az error falls in this 4% window
+     Recommendation: cadence-aligned collocation with 3× density at push-off
+     Physical basis: push-off is governed by vertical_oscillation_cm × cadence²
+   ```
+
+2. `pinn-grid-controller` — proposes grid search Bill with two axes:
+   - Axis 1: collocation density ratio at push-off (1×, 2×, 3×, 4×)
+   - Axis 2: window boundary definition (cadence-derived vs fixed 20ms)
+   Physical hypothesis: 3× density at the cadence-period push-off window will
+   reduce val_az by ≥30% without degrading val_gyy.
+   Renode assertion: step count accuracy must remain ≥98%.
+   Bill filed — grid search is a calibration decision under Amendment 13.
+
+3. `bill-drafter` — formats the architecture Bill:
+   **BILL: Physics-Aligned Collocation Strategy v1**
+   Change type: software (new `collocation_strategy.py` module)
+   Physical evidence: sw-advisor residual analysis above.
+   Expected outcome: val_az epoch-93 residual <9,500 m/s² (vs 14,312 baseline).
+
+4. `judicial-clerk` — warms courtroom. Two positions:
+
+5. **attorney-A** argues **uniform collocation (Article I — primitive traceability)**:
+   - Uniform sampling is the only strategy that makes no assumption about *which*
+     part of the gait cycle is more important. Any density perturbation is itself
+     a parameter — and that parameter must trace to a primitive.
+   - "Push-off is important" is biomechanical intuition, not a derived quantity.
+     If the window boundary is 0.18–0.22 × T_stride, where does 0.18 come from?
+     It does not close from cadence, vertical_oscillation, or step_length.
+   - Amendment 13: calibration constants require Bills. But the window boundary
+     is not a calibration constant — it is a structural assumption about the
+     physics domain. Uniform sampling has no such assumption; it is Article I
+     compliant by construction.
+
+6. **attorney-B** argues **physics-aligned collocation (Article I — signal evidence)**:
+   - Article I requires parameters to trace to primitives. The push-off window
+     boundary *does* close: T_push_off = 0.2 × T_stride = 0.2 × (60 / cadence_spm).
+     0.2 is the biomechanically observed push-off fraction — a measurement, not a
+     guess. `sw-advisor` residual evidence confirms this fraction is where the
+     signal energy is.
+   - `physics-reviewer` invoked: plots collocation point density vs |az| amplitude
+     across the stride. The mismatch is structural — uniform sampling cannot
+     represent the push-off physics regardless of lambda_az.
+   - The Thomas Jefferson Principle: which decision gives a patient the most
+     accurate measurement of their own gait? A PINN that under-samples the
+     biomechanically critical window is not clinically honest.
+
+7. **Justice rules** (Benjamin Franklin Principle + Thomas Jefferson Principle):
+   - `physics-reviewer` plot is the deciding evidence: push-off fraction 0.2 is
+     a biomechanically measured constant, not a guess. It closes from cadence.
+   - The window boundary `T_push_off = 0.2 × (60 / cadence_spm)` is Article I
+     compliant — it is a projection of primitive 2 (cadence) onto the time domain.
+   - **Physics-aligned collocation prevails. Window must be cadence-derived.**
+   - Condition: density ratio of 3× is the grid-search default — final value
+     requires `pinn-grid-controller` results before 500-epoch run locks it.
+   - Case law entry appended to `docs/gaitsense_code/case_law.md`.
+
+8. **`layer-setter` writes `collocation_strategy.py`** (enacted Bill):
+   ```python
+   # collocation_strategy.py — enacted Bill: Physics-Aligned Collocation v1
+   # Window boundary traces to: T_push_off = 0.2 × (60 / cadence_spm)
+   # Amendment 13 calibration constant: density_ratio = 3.0 (pending grid search)
+
+   import numpy as np
+
+   PUSH_OFF_FRACTION = 0.20   # biomechanically measured; closes from cadence
+   DENSITY_RATIO     = 3.0    # calibration constant — Bill required to change
+
+   def sample_collocation_points(
+       n_total: int,
+       cadence_spm: float,
+       n_strides: int,
+   ) -> np.ndarray:
+       """
+       Returns collocation time points with 3× density in the push-off window.
+       All window boundaries derived from cadence_spm (Article I primitive 2).
+       """
+       stride_period = 60.0 / cadence_spm          # seconds
+       t_end         = stride_period * n_strides
+
+       # Push-off window per stride: [0.18, 0.22] × T_stride
+       half_width = 0.02 * stride_period
+       push_off_centers = np.arange(n_strides) * stride_period + \
+                          PUSH_OFF_FRACTION * stride_period
+
+       # Budget: solve for n_base and n_dense such that total = n_total
+       # and push-off windows get DENSITY_RATIO × base density.
+       window_fraction = 2 * 0.02          # 4% of stride is push-off
+       dense_fraction  = window_fraction * DENSITY_RATIO
+       base_fraction   = 1.0 - window_fraction
+       # n_dense / n_base = DENSITY_RATIO → n_total = n_base*base_fraction/base_fraction...
+       n_dense_total = int(n_total * dense_fraction /
+                           (base_fraction + dense_fraction))
+       n_base_total  = n_total - n_dense_total
+
+       # Sample base points uniformly, excluding push-off windows
+       t_uniform = np.linspace(0, t_end, n_base_total * 4)
+       mask = np.ones(len(t_uniform), dtype=bool)
+       for center in push_off_centers:
+           mask &= np.abs(t_uniform - center) > half_width
+       t_base = np.random.choice(t_uniform[mask], n_base_total, replace=False)
+
+       # Sample dense points inside push-off windows
+       t_dense_parts = [
+           np.random.uniform(c - half_width, c + half_width,
+                             n_dense_total // n_strides)
+           for c in push_off_centers
+       ]
+       t_dense = np.concatenate(t_dense_parts)
+
+       return np.sort(np.concatenate([t_base, t_dense]))
+   ```
+
+   Amendment 11 signal plot fires: collocation density vs stride phase plotted
+   and confirmed before any training runs with the new strategy.
+
+9. `pinn-executor` — runs two warmup-93 checkpoints side by side:
+   uniform vs physics-aligned (cadence-derived window, density_ratio=3.0).
+   30 additional epochs only (evidence run, not full training).
+
+10. `train-sum` — comparison table:
+    ```
+    Strategy          val_az @30ep   val_gyy @30ep   notes
+    ──────────────────────────────────────────────────────
+    Uniform           13,841 m/s²    1,498 dps²      baseline
+    Physics-aligned    8,203 m/s²    1,491 dps²      −41% az, gyy unchanged
+    ```
+    Finding: physics-aligned reduces val_az by 41% in 30 epochs without
+    touching val_gyy. Grid search for density_ratio proceeds before 500-epoch run.
+
+**Key demo moment — coding skill:** `layer-setter` writes a constitutionally valid
+production module from a judicial ruling. The window boundary is not a magic number
+— it is `0.2 × (60 / cadence_spm)`, explicitly derived from primitive 2. The density
+ratio is flagged as a calibration constant requiring its own Bill before it is locked.
+The `pinn-grid-controller` then owns finding the optimal ratio. Every line of code
+traces back to the governance system that produced it.
+
+---
+
+## Full Agent Roster (38 agents across this session)
 
 | Agent | Act | Role |
 |-------|-----|------|
 | `loss-setter` | 0 | Physics loss derivation from primitives |
 | `pinn-compiler` | 0 | Hyperparameter Bills |
-| `layer-setter` | 0 | Architecture definition + freeze |
-| `pinn-executor` | 0, 1 | Training + novel profile inference |
-| `pinn-monitor` | 0 | Per-epoch logging |
-| `physics-reviewer` | 0, 3 | Derivation evidence package |
-| `train-sum` | 0, 1 | Loss curves + step count accuracy |
+| `layer-setter` | 0, 0.5, 6 | Architecture freeze; Fourier feature amendment; writes `collocation_strategy.py` |
+| `pinn-executor` | 0, 0.5, 1, 6 | Training + resumed warmup + novel inference + collocation comparison |
+| `pinn-monitor` | 0, 0.5 | Per-epoch logging |
+| `physics-reviewer` | 0, 0.5, 3, 6 | Derivation evidence; az residual; collocation density plot |
+| `train-sum` | 0, 0.5, 1, 6 | Loss curves; az convergence; step count; collocation comparison table |
+| `bill-drafter` | 0.5, 3, 6 | Bills: az architecture; lambda_gyy hearing; collocation strategy |
+| `judicial-clerk` | 0.5, 3, 6 | Courtroom setup |
+| `attorney-A` | 0.5, 3, 6 | Amend. 13 (az); Amend. 13 (lambda); uniform collocation (Article I) |
+| `attorney-B` | 0.5, 3, 6 | Amend. 11 + Art. I (az); Art. I (lambda); physics-aligned collocation (Art. I + Thomas Jefferson) |
 | `simulator-operator` | 1 | Renode pipeline orchestration |
 | `uart-reader` | 1 | STEP/SNAPSHOT output |
 | `plotter` | 1 | Amendment 11 signal plots |
 | `police` | 2, 5 | Constitutional violations (Article I + II) |
-| `bill-drafter` | 3 | Bill formatting |
-| `judicial-clerk` | 3 | Courtroom setup |
-| `attorney-A` | 3 | Amendment 13 position |
-| `attorney-B` | 3 | Article I position |
 | `plot-orchestrator` | 4 | Evidence package coordination |
+| `sw-advisor` | 6 | Residual analysis — identifies push-off collocation gap |
+| `pinn-grid-controller` | 6 | Proposes density ratio grid search Bill |
 | `pinn-validator` | 5 | Amendment 11 + 19 checks |
 | `pinn-archivist` | 5 | Checkpoint manifest + SHA-256 |
 | `doc-processor` | 5 | Gemma PRIVATE → DERIVED-OK closeout |
