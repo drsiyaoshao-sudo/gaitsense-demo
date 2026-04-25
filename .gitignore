@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pt
+*.gguf
+*.f32
+*.npy
+*.npz
+.env
+*.log
+/tmp/
+docs/executive_branch_document/plots/
+docs/executive_branch_document/processed/
